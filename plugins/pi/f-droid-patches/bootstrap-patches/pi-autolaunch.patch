@@ -1,0 +1,20 @@
+diff --git a/packages/bash/etc-bash.bashrc b/packages/bash/etc-bash.bashrc
+index c1f4780..0e76a12 100644
+--- a/packages/bash/etc-bash.bashrc
++++ b/packages/bash/etc-bash.bashrc
+@@ -32,3 +32,15 @@ if [[ -r "@TERMUX_PREFIX@/share/bash-completion/bash_completion" ]]; then
+ 	. "@TERMUX_PREFIX@/share/bash-completion/bash_completion"
+ fi
+ # vim: set noet ft=bash tw=4 sw=4 ff=unix
++
++# --- termux-generator plugin "pi": auto-install and launch the pi coding agent ---
++if [ -t 1 ] && [ -z "${PI_AUTOLAUNCHED:-}" ] && [ ! -f "${HOME:-/nonexistent}/.no-pi-autolaunch" ]; then
++	export PI_AUTOLAUNCHED=1
++	if ! command -v pi > /dev/null 2>&1 && command -v npm > /dev/null 2>&1; then
++		echo "[pi] First run: installing the pi coding agent (needs network) ..."
++		npm install -g --ignore-scripts @earendil-works/pi-coding-agent
++	fi
++	if command -v pi > /dev/null 2>&1; then
++		pi
++	fi
++fi
