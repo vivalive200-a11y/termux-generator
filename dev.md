@@ -51,22 +51,37 @@ gh workflow run build-termux.yml -R vivalive200-a11y/termux-generator \
 5. **dpkg 不可用**：实测 `pkg install` 的 dpkg 解包报 `error creating directory './data/data/com.pi.termux':
    Permission denied`。故 npm 走构建期烘入（而非运行期 pkg），pi 走 npm registry 安装。
 
-## 实机验证（已通过）
+## 实机验证（已通过，2026-10-11）
 
-- App 安装后打开 → 自动进入 `pi v1.1.0`（在 Redmi Note 12 Turbo 上）。
-- 环境：Termux 0.118.0 / node v26.4.0 / npm 11.20.0 / pi 1.1.0。
+**干净重装测试**：卸载全部 termux 包 → 仅安装 universal APK → 打开 →
+自动解压 bootstrap → 自动 `npm install -g pi` → **直接进入 `pi v1.1.0`**。
+
+- 设备：Redmi Note 12 Turbo（marble, Android 14 / HyperOS, 已 root/Magisk）
+- 环境：node v26.4.0 / npm 11.20.0 / pi 1.1.0 / fd 10.5.0 / ripgrep 15.2.0
+- 无 fd/ripgrep 警告（已烘入）；仅"未登录 provider"提示（正常，待 `pi /login`）。
+- 包名：`com.pi.termux`（universal APK 的 applicationId）。
 
 ## 状态
 
 - [x] fork + 插件 + 补丁（可干净套用）
 - [x] 首版构建 + 下载 + 实机安装
 - [x] 打通 SELinux / npm / shebang 全部环节，实机进入 pi
-- [ ] 用 `--add npm,fd,ripgrep` 重建自足版 APK
-- [ ] 验证重建版（无需手动补 npm）
+- [x] 用 `--add nodejs,npm,fd,ripgrep` 重建自足版 APK
+- [x] 干净重装验证（无需任何手动补 npm/pi）
+- [x] SELinux 策略持久化（`/data/adb/service.d/pi-termux-sepolicy.sh`）
+
+## 交付物
+
+- 自足版 APK：`/data/local/tmp/termux2.apk`（设备）+ 本机
+  `%TEMP%\opencode\pi-artifact2\x\com.pi.termux-f-droid-termux-app_apt-android-7-debug_universal.apk`
+- 构建 run：`vivalive200-a11y/termux-generator` run `38115732843`（artifact `Termux APKs or bootstraps`）
 
 ## 待办 / 已知局限
 
-- 运行前提：目标 ROM 若同款 SELinux 限制，需 root 加策略（见插件 README）。
+- 运行前提：目标 ROM 若同款 SELinux 限制，需 root 加策略（见插件 README）。本机已持久化。
 - 剪贴板仅文本（Termux 限制）。
 - 产物为 debug 签名；分发需自行签名。
 - 禁用自动进入 pi：`touch ~/.no-pi-autolaunch`。
+- 首次进入后需 `pi /login` 配置 provider 才能用。
+- 云端构建耗时 ~4h（GitHub 2 核 + 从源码编 nodejs/V8 + Rust 的 fd/ripgrep）；
+  本机 40 核若配好 Docker/WSL2 可大幅缩短。
