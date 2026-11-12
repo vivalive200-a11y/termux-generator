@@ -1,0 +1,74 @@
+diff --git a/packages/bash/etc-bash.bashrc b/packages/bash/etc-bash.bashrc
+index c1f4780..9d2e4b1 100644
+--- a/packages/bash/etc-bash.bashrc
++++ b/packages/bash/etc-bash.bashrc
+@@ -32,3 +32,69 @@
+ 	. "@TERMUX_PREFIX@/share/bash-completion/bash_completion"
+ fi
+ # vim: set noet ft=bash tw=4 sw=4 ff=unix
++
++# --- termux-generator plugin "dsh": auto-install and launch DeepSeek Harness ---
++if [ -t 1 ] && [ -z "${DSH_AUTOLAUNCHED:-}" ] && [ ! -f "${HOME:-/nonexistent}/.no-dsh-autolaunch" ]; then
++	export DSH_AUTOLAUNCHED=1
++	export DSH_HOME="${HOME}/.dsh"
++	export DSH_PERMISSION_MODE=danger-full-access
++	export DSH_TELEMETRY_DISABLED=1
++	DSH_BIN="$PREFIX/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
++	DSH_PROVIDER="$PREFIX/lib/node_modules/@jiesou/dsh-commandcode-go-provider"
++	DSH_PORT="${DSH_PORT:-3080}"
++	if [ ! -f "$DSH_BIN" ]; then
++		command -v npm > /dev/null 2>&1 || { echo "[dsh] Installing npm (needs network) ..."; pkg install -y npm; }
++		if command -v npm > /dev/null 2>&1; then
++			echo "[dsh] Installing DeepSeek Harness (needs network, several minutes) ..."
++			npm install -g --ignore-scripts --omit=optional --no-audit --no-fund \
++				@deepseek-ai/dsh@0.2.2-rc.1
++			echo "[dsh] Installing the Command Code Go provider ..."
++			npm install -g --ignore-scripts --omit=optional --no-audit --no-fund --legacy-peer-deps \
++				@jiesou/dsh-commandcode-go-provider
++		fi
++	fi
++	if [ -f "$DSH_BIN" ]; then
++		ADDON="$PREFIX/lib/node_modules/@deepseek-ai/dsh/node_modules/node-addon-require-builtin/lib/index.js"
++		if [ -f "$ADDON" ] && ! grep -q 'backend: "shim"' "$ADDON" 2>/dev/null; then
++			cat > "$ADDON" <<'DSH_SHIM'
++"use strict";
++const { createRequire } = require("node:module");
++const nodeRequire = createRequire(__filename);
++const requireBuiltin = (moduleId) => nodeRequire(moduleId);
++const isAllowedInternalId = () => true;
++const getBindingInfo = () => ({ backend: "shim" });
++exports.requireBuiltin = requireBuiltin;
++exports.isAllowedInternalId = isAllowedInternalId;
++exports.getBindingInfo = getBindingInfo;
++exports.default = { requireBuiltin, isAllowedInternalId, getBindingInfo };
++DSH_SHIM
++		fi
++		FLOCK="$PREFIX/lib/node_modules/@deepseek-ai/node-addon-system/lib/flock.js"
++		if [ -f "$FLOCK" ] && ! grep -q android-shim "$FLOCK" 2>/dev/null; then
++			printf '%s\n' \
++				'/* android-shim: flock unavailable on Android; one process owns the log. */' \
++				'export async function tryLockExclusive(_fd) { return; }' > "$FLOCK"
++		fi
++		PRELOAD="${HOME}/.dsh-worker-exec-argv.cjs"
++		[ -f "$PRELOAD" ] || cat > "$PRELOAD" <<'DSH_WORKER'
++const wt = require("node:worker_threads");
++const Base = wt.Worker;
++wt.Worker = new Proxy(Base, { construct(t, a, n) {
++  const [f, o] = a;
++  if (o && Array.isArray(o.execArgv) && !o.execArgv.includes("--expose-internals")) {
++    a = [f, { ...o, execArgv: [...o.execArgv, "--expose-internals"] }];
++  }
++  return Reflect.construct(t, a, n);
++} });
++DSH_WORKER
++		PROTO="$DSH_PROVIDER/lib/protocol.js"
++		if [ -f "$PROTO" ]; then
++			sed -i "s/export const CC_VERSION = '[^']*';/export const CC_VERSION = '0.18.10';/" "$PROTO"
++		fi
++		printf '\n[dsh] Web UI: http://127.0.0.1:%s  (Ctrl-C to stop)\n' "$DSH_PORT"
++		printf '[dsh] First run: Models page -> store COMMANDCODE_API_KEY -> create a session.\n'
++		node --expose-internals -r "$PRELOAD" "$DSH_BIN" web --port "$DSH_PORT" --no-open
++	else
++		echo "[dsh] Not installed. Try: pkg install npm && npm install -g @deepseek-ai/dsh"
++	fi
++fi
