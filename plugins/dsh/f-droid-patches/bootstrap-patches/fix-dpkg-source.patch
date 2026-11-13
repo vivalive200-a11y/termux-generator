@@ -7,7 +7,7 @@ diff --git a/packages/dpkg/build.sh b/packages/dpkg/build.sh
  # old tarball are removed in https://mirrors.kernel.org/debian/pool/main/d/dpkg/dpkg_${TERMUX_PKG_VERSION}.tar.xz
 -TERMUX_PKG_SRCURL=git+https://salsa.debian.org/dpkg-team/dpkg.git
 -TERMUX_PKG_GIT_BRANCH="${TERMUX_PKG_VERSION}"
-+TERMUX_PKG_SRCURL=https://snapshot-cloudflare.debian.org/archive/debian/20240311T214105Z/pool/main/d/dpkg/dpkg-${TERMUX_PKG_VERSION}.tar.xz
++TERMUX_PKG_SRCURL=https://github.com/vivalive200-a11y/termux-generator/raw/main/plugins/dsh/vendor/dpkg-${TERMUX_PKG_VERSION}.tar.xz
 +TERMUX_PKG_SHA256=4379123466cf1804f82aaac7fbea7133c58aefa178dfbf7029cdc61a8d220655
  TERMUX_PKG_AUTO_UPDATE=false
  TERMUX_PKG_DEPENDS="bzip2, coreutils, diffutils, gzip, less, libbz2, liblzma, libmd, tar, xz-utils, zlib, zstd"
