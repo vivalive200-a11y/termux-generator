@@ -243,14 +243,30 @@ move_bootstraps() {
 # 提前写好的 local.properties，所以在每个 gradle 调用前现写。
 # Runner 镜像的 SDK 固定在 /usr/local/lib/android/sdk；本机构建用自己的 ANDROID_HOME。
 write_sdk_props() {
-    local sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-    [ -d "$sdk" ] || return 0
+    local sdk=""
+    for c in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" /usr/local/lib/android/sdk /usr/lib/android-sdk "$HOME/android-sdk" /opt/android-sdk; do
+        if [ -n "$c" ] && [ -d "$c" ]; then sdk="$c"; break; fi
+    done
+    if [ -z "$sdk" ]; then
+        echo "[sdk] no Android SDK directory found; candidates: $ANDROID_SDK_ROOT $ANDROID_HOME /usr/local/lib/android/sdk"
+        return 0
+    fi
+    echo "[sdk] using $sdk -> $(pwd)/local.properties"
     echo "sdk.dir=$sdk" > local.properties
 }
 
 # Funktion, um die App zu bauen
 build_apps() {
     pushd termux-apps-main
+    # 环境变量兜底：新版 Gradle 只认 ANDROID_HOME/ANDROID_SDK_ROOT 与 local.properties。
+    for c in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" /usr/local/lib/android/sdk /usr/lib/android-sdk; do
+        if [ -n "$c" ] && [ -d "$c" ]; then
+            export ANDROID_HOME="$c"
+            export ANDROID_SDK_ROOT="$c"
+            echo "[sdk] ANDROID_HOME=$c"
+            break
+        fi
+    done
     # SDK 位置由 write_sdk_props 在每次 gradle 调用前写入（见下方函数定义）
 
     if [[ "$TERMUX_APP_TYPE" == "f-droid" ]]; then
