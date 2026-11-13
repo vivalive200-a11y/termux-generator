@@ -239,21 +239,24 @@ move_bootstraps() {
     fi
 }
 
+# 新版 Gradle 不再从环境推断 SDK 位置，且 patch_apps/replace_termux_name 会覆盖
+# 提前写好的 local.properties，所以在每个 gradle 调用前现写。
+# Runner 镜像的 SDK 固定在 /usr/local/lib/android/sdk；本机构建用自己的 ANDROID_HOME。
+write_sdk_props() {
+    local sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+    [ -d "$sdk" ] || return 0
+    echo "sdk.dir=$sdk" > local.properties
+}
+
 # Funktion, um die App zu bauen
 build_apps() {
     pushd termux-apps-main
-    # 新版 Gradle 不再从环境推断 SDK 位置，每个 gradle 工程都要自己的 local.properties。
-    # Runner 镜像的 SDK 固定在这里；没有该目录就跳过（本地构建时用自己的 ANDROID_HOME）。
-    SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-    if [ -d "$SDK_DIR" ]; then
-        for d in */; do
-            [ -f "$d/gradlew" ] && echo "sdk.dir=$SDK_DIR" > "$d/local.properties"
-        done
-    fi
+    # SDK 位置由 write_sdk_props 在每次 gradle 调用前写入（见下方函数定义）
 
     if [[ "$TERMUX_APP_TYPE" == "f-droid" ]]; then
         if [ -z "${DISABLE_TERMINAL}" ]; then
             pushd termux-app
+                write_sdk_props
                 ./gradlew publishReleasePublicationToMavenLocal
             popd
         fi
@@ -286,6 +289,7 @@ build_apps() {
                 continue
             fi
             pushd "$app"
+                write_sdk_props
                 ./gradlew assembleDebug
             popd
         done
@@ -294,6 +298,7 @@ build_apps() {
             export JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64
             sudo update-alternatives --set java "$JAVA_HOME/bin/java"
         fi
+        write_sdk_props
         ./gradlew assembleDebug
     fi
 
