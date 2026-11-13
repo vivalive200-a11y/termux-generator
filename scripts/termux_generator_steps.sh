@@ -242,6 +242,14 @@ move_bootstraps() {
 # Funktion, um die App zu bauen
 build_apps() {
     pushd termux-apps-main
+    # 新版 Gradle 不再从环境推断 SDK 位置，每个 gradle 工程都要自己的 local.properties。
+    # Runner 镜像的 SDK 固定在这里；没有该目录就跳过（本地构建时用自己的 ANDROID_HOME）。
+    SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+    if [ -d "$SDK_DIR" ]; then
+        for d in */; do
+            [ -f "$d/gradlew" ] && echo "sdk.dir=$SDK_DIR" > "$d/local.properties"
+        done
+    fi
 
     if [[ "$TERMUX_APP_TYPE" == "f-droid" ]]; then
         if [ -z "${DISABLE_TERMINAL}" ]; then
