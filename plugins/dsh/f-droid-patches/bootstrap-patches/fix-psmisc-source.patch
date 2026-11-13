@@ -1,0 +1,13 @@
+diff --git a/packages/psmisc/build.sh b/packages/psmisc/build.sh
+--- a/packages/psmisc/build.sh
++++ b/packages/psmisc/build.sh
+@@ -5,7 +5,8 @@
+ TERMUX_PKG_MAINTAINER="@termux"
+ TERMUX_PKG_VERSION=23.7
+ TERMUX_PKG_REVISION=1
+-TERMUX_PKG_SRCURL=https://fossies.org/linux/misc/psmisc-$TERMUX_PKG_VERSION.tar.xz
++# fossies.org 现在要求认证（401）；Debian 池里是同版本同内容的 orig tarball。
++TERMUX_PKG_SRCURL=https://deb.debian.org/debian/pool/main/p/psmisc/psmisc_$TERMUX_PKG_VERSION.orig.tar.xz
+ TERMUX_PKG_SHA256=58c55d9c1402474065adae669511c191de374b0871eec781239ab400b907c327
+ TERMUX_PKG_DEPENDS="ncurses"
+ TERMUX_PKG_ESSENTIAL=true

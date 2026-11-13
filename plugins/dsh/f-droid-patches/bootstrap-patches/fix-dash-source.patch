@@ -1,0 +1,13 @@
+diff --git a/packages/dash/build.sh b/packages/dash/build.sh
+--- a/packages/dash/build.sh
++++ b/packages/dash/build.sh
+@@ -5,8 +5,9 @@
+ TERMUX_PKG_MAINTAINER="@termux"
+ TERMUX_PKG_VERSION="0.5.13.5"
+-TERMUX_PKG_SRCURL="https://git.kernel.org/pub/scm/utils/dash/dash.git/snapshot/dash-${TERMUX_PKG_VERSION}.tar.gz"
+-TERMUX_PKG_SHA256=53622e51df0fd7a2950552cfe0da0bee9bfc1510784e752b62eacc49b3776d33
++# git.kernel.org 对云端 IP 返回 403；改取 Debian 池里的同版本 orig tarball。
++TERMUX_PKG_SRCURL="https://deb.debian.org/debian/pool/main/d/dash/dash_${TERMUX_PKG_VERSION}.orig.tar.gz"
++TERMUX_PKG_SHA256=40090101a2a491f13e901d3d48e90414f26634628b9bfff35ff540363c227a7d
+ TERMUX_PKG_ESSENTIAL=true
+ TERMUX_PKG_EXTRA_CONFIGURE_ARGS="--disable-static"
