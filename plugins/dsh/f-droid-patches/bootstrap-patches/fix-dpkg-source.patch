@@ -17,7 +17,7 @@ diff --git a/packages/dpkg/build.sh b/packages/dpkg/build.sh
  	(
  		cd "${TERMUX_PKG_SRCDIR}" && \
 -		./autogen && \
-+		find . -name Makefile.in -exec touch {} + && \
++		autoreconf --force --install && \
  		patch -p1 -i "${TERMUX_PKG_BUILDER_DIR}"/configure.diff
  	)
  	export TAR=tar # To make sure dpkg tries to use "tar" instead of e.g. "gnutar" (which happens when building on OS X)
