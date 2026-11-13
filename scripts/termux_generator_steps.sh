@@ -242,31 +242,43 @@ move_bootstraps() {
 # 新版 Gradle 不再从环境推断 SDK 位置，且 patch_apps/replace_termux_name 会覆盖
 # 提前写好的 local.properties，所以在每个 gradle 调用前现写。
 # Runner 镜像的 SDK 固定在 /usr/local/lib/android/sdk；本机构建用自己的 ANDROID_HOME。
-write_sdk_props() {
-    local sdk=""
-    for c in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" /usr/local/lib/android/sdk /usr/lib/android-sdk "$HOME/android-sdk" /opt/android-sdk; do
-        if [ -n "$c" ] && [ -d "$c" ]; then sdk="$c"; break; fi
+# Runner 镜像不一定自带 Android SDK（2026-11 起没有）。有就复用，没有就用
+# commandlinetools 装一份最小的到 $HOME/android-sdk，只要 platform-tools + platforms。
+ensure_android_sdk() {
+    if [ -n "${DSH_ANDROID_SDK_READY:-}" ]; then return 0; fi
+    for c in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" /usr/local/lib/android/sdk /usr/lib/android-sdk; do
+        if [ -n "$c" ] && [ -d "$c/platform-tools" ]; then
+            export DSH_ANDROID_SDK="$c"
+            export DSH_ANDROID_SDK_READY=1
+            echo "[sdk] reusing $c"
+            return 0
+        fi
     done
-    if [ -z "$sdk" ]; then
-        echo "[sdk] no Android SDK directory found; candidates: $ANDROID_SDK_ROOT $ANDROID_HOME /usr/local/lib/android/sdk"
-        return 0
-    fi
-    echo "[sdk] using $sdk -> $(pwd)/local.properties"
-    echo "sdk.dir=$sdk" > local.properties
+    local dir="$HOME/android-sdk"
+    mkdir -p "$dir/cmdline-tools"
+    echo "[sdk] installing commandlinetools into $dir (no SDK on this runner)"
+    curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip || return 1
+    unzip -q -o /tmp/cmdtools.zip -d "$dir/cmdline-tools" || return 1
+    mv "$dir/cmdline-tools/cmdline-tools" "$dir/cmdline-tools/latest" 2>/dev/null || true
+    yes | "$dir/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$dir" --licenses >/dev/null 2>&1 || true
+    "$dir/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$dir" "platform-tools" "platforms;android-35" "build-tools;35.0.0" >/dev/null || return 1
+    export ANDROID_HOME="$dir"
+    export ANDROID_SDK_ROOT="$dir"
+    export DSH_ANDROID_SDK="$dir"
+    export DSH_ANDROID_SDK_READY=1
+    echo "[sdk] installed commandlinetools + platform-tools into $dir"
+}
+
+write_sdk_props() {
+    ensure_android_sdk || { echo "[sdk] SDK bootstrap failed"; return 1; }
+    echo "[sdk] using $DSH_ANDROID_SDK -> $(pwd)/local.properties"
+    echo "sdk.dir=$DSH_ANDROID_SDK" > local.properties
 }
 
 # Funktion, um die App zu bauen
 build_apps() {
     pushd termux-apps-main
-    # 环境变量兜底：新版 Gradle 只认 ANDROID_HOME/ANDROID_SDK_ROOT 与 local.properties。
-    for c in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" /usr/local/lib/android/sdk /usr/lib/android-sdk; do
-        if [ -n "$c" ] && [ -d "$c" ]; then
-            export ANDROID_HOME="$c"
-            export ANDROID_SDK_ROOT="$c"
-            echo "[sdk] ANDROID_HOME=$c"
-            break
-        fi
-    done
+    ensure_android_sdk || { echo "[sdk] cannot continue without an Android SDK"; popd; return 1; }
     # SDK 位置由 write_sdk_props 在每次 gradle 调用前写入（见下方函数定义）
 
     if [[ "$TERMUX_APP_TYPE" == "f-droid" ]]; then
