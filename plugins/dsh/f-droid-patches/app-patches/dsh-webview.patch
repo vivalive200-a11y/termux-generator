@@ -1,0 +1,221 @@
+diff --git a/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java b/app/src/main/java/com/termux/app/TermuxActivity.java
+index 0c9f741..3e76fd5 100644
+--- a/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java
++++ b/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java
+@@ -86,6 +86,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
+      */
+     TermuxService mTermuxService;
+ 
++    /** Swaps the terminal for the DSH web UI once the server is listening. */
++    DshWebOverlay mDshWebOverlay;
++
+     /**
+      * The {@link TerminalView} shown in  {@link TermuxActivity} that displays the terminal.
+      */
+@@ -274,6 +277,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
+             return;
+         }
+ 
++        // Show the DSH web UI once `.bashrc` has started it; the terminal stays one tap away.
++        mDshWebOverlay = new DshWebOverlay(this,
++            findViewById(R.id.dsh_web_view),
++            findViewById(R.id.drawer_layout),
++            findViewById(R.id.dsh_terminal_toggle_button));
++        mDshWebOverlay.start();
++
+         // Send the {@link TermuxConstants#BROADCAST_TERMUX_OPENED} broadcast to notify apps that Termux
+         // app has been opened.
+         TermuxUtils.sendTermuxOpenedBroadcast(this);
+@@ -346,6 +356,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
+ 
+     @Override
+     public void onDestroy() {
++        if (mDshWebOverlay != null) mDshWebOverlay.stop();
+         super.onDestroy();
+ 
+         Logger.logDebug(LOG_TAG, "onDestroy");
+@@ -1010,4 +1021,4 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
+         return intent;
+     }
+ 
+-}
++}
+\ No newline at end of file
+diff --git a/termux-app/app/src/main/java/com/termux/app/terminal/DshWebOverlay.java b/app/src/main/java/com/termux/app/terminal/DshWebOverlay.java
+new file mode 100644
+index 0000000..1f1da6d
+--- /dev/null
++++ b/termux-app/app/src/main/java/com/termux/app/terminal/DshWebOverlay.java
+@@ -0,0 +1,125 @@
++package com.termux.app.terminal;
++
++import android.annotation.SuppressLint;
++import android.app.Activity;
++import android.content.Intent;
++import android.net.Uri;
++import android.os.Handler;
++import android.os.Looper;
++import android.util.Log;
++import android.view.View;
++import android.webkit.WebResourceRequest;
++import android.webkit.WebView;
++import android.webkit.WebViewClient;
++
++import java.io.File;
++import java.io.IOException;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++
++/**
++ * Swaps the terminal for the DSH web UI as soon as the server is up.
++ *
++ * Termux's bootstrap second stage runs `~/.bashrc`, which starts `dsh web` on
++ * 127.0.0.1:3080 and writes the authenticated URL (it carries a per-process
++ * token) to `$HOME/.dsh-web-url`. This overlay waits for that file, then loads
++ * it into a WebView so the app is usable the moment it is opened. Long-press
++ * the floating button (or tap the WebView's overflow) to go back to the terminal.
++ */
++public final class DshWebOverlay {
++
++    private static final String LOG_TAG = "DshWebOverlay";
++    private static final int DSH_PORT = 3080;
++    private static final long POLL_INTERVAL_MS = 500;
++    private static final long POLL_TIMEOUT_MS = 600000;
++
++    private final Activity activity;
++    private final View webView;
++    private final View terminalView;
++    private final View toggleButton;
++    private final File urlFile;
++    private final Handler handler = new Handler(Looper.getMainLooper());
++    private final long startedAt = System.currentTimeMillis();
++    private String loadedUrl;
++    private boolean stopped;
++
++    public DshWebOverlay(Activity activity, WebView webView, View terminalView, View toggleButton) {
++        this.activity = activity;
++        this.webView = webView;
++        this.terminalView = terminalView;
++        this.toggleButton = toggleButton;
++        this.urlFile = new File(activity.getFilesDir().getParentFile(), "home/.dsh-web-url");
++        configure(webView);
++        toggleButton.setOnClickListener(v -> showTerminal());
++    }
++
++    @SuppressLint("SetJavaScriptEnabled")
++    private void configure(WebView view) {
++        view.getSettings().setJavaScriptEnabled(true);
++        view.getSettings().setDomStorageEnabled(true);
++        view.getSettings().setAllowFileAccess(false);
++        view.setWebViewClient(new WebViewClient() {
++            @Override
++            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request) {
++                Uri uri = request.getUrl();
++                String host = uri.getHost();
++                if (host != null && (host.equals("127.0.0.1") || host.equals("localhost"))) return false;
++                try {
++                    v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, uri));
++                } catch (Exception e) {
++                    Log.w(LOG_TAG, "no activity handles " + uri, e);
++                }
++                return true;
++            }
++        });
++    }
++
++    public void start() {
++        handler.post(poll);
++    }
++
++    public void stop() {
++        stopped = true;
++        handler.removeCallbacks(poll);
++    }
++
++    private final Runnable poll = new Runnable() {
++        @Override
++        public void run() {
++            if (stopped) return;
++            String url = readUrl();
++            if (url != null && !url.equals(loadedUrl)) {
++                loadedUrl = url;
++                showWeb();
++                ((WebView) webView).loadUrl(url);
++                return;
++            }
++            if (System.currentTimeMillis() - startedAt < POLL_TIMEOUT_MS) {
++                handler.postDelayed(this, POLL_INTERVAL_MS);
++            }
++        }
++    };
++
++    /** The URL file is rewritten by every shell start; an empty or absent file means "not yet". */
++    private String readUrl() {
++        if (!urlFile.isFile()) return null;
++        try {
++            String text = new String(Files.readAllBytes(urlFile.toPath()), StandardCharsets.UTF_8).trim();
++            return text.startsWith("http") ? text : null;
++        } catch (IOException e) {
++            return null;
++        }
++    }
++
++    private void showWeb() {
++        terminalView.setVisibility(View.GONE);
++        webView.setVisibility(View.VISIBLE);
++        toggleButton.setVisibility(View.VISIBLE);
++    }
++
++    private void showTerminal() {
++        webView.setVisibility(View.GONE);
++        terminalView.setVisibility(View.VISIBLE);
++        toggleButton.setVisibility(View.VISIBLE);
++    }
++}
+diff --git a/termux-app/app/src/main/res/layout/activity_termux.xml b/app/src/main/res/layout/activity_termux.xml
+index 831ea7c..e06f48c 100644
+--- a/termux-app/app/src/main/res/layout/activity_termux.xml
++++ b/termux-app/app/src/main/res/layout/activity_termux.xml
+@@ -94,6 +94,25 @@
+ 
+         </androidx.drawerlayout.widget.DrawerLayout>
+ 
++        <WebView
++            android:id="@+id/dsh_web_view"
++            android:layout_width="match_parent"
++            android:layout_height="match_parent"
++            android:visibility="gone" />
++
++        <ImageButton
++            android:id="@+id/dsh_terminal_toggle_button"
++            android:layout_width="48dp"
++            android:layout_height="48dp"
++            android:layout_alignParentBottom="true"
++            android:layout_alignParentRight="true"
++            android:layout_margin="12dp"
++            android:alpha="0.6"
++            android:background="@android:color/transparent"
++            android:contentDescription="@string/action_open_terminal"
++            android:src="@android:drawable/ic_menu_edit"
++            android:visibility="gone" />
++
+         <androidx.viewpager.widget.ViewPager
+             android:id="@+id/terminal_toolbar_view_pager"
+             android:visibility="gone"
+@@ -110,4 +129,4 @@
+         android:layout_height="1dp"
+         android:background="@android:color/transparent" />
+ 
+-</com.termux.app.terminal.TermuxActivityRootView>
++</com.termux.app.terminal.TermuxActivityRootView>
+\ No newline at end of file
+diff --git a/termux-app/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index cbd2992..75a5d16 100644
+--- a/termux-app/app/src/main/res/values/strings.xml
++++ b/termux-app/app/src/main/res/values/strings.xml
+@@ -235,4 +235,5 @@
+     <!-- Donate Preference -->
+     <string name="donate_preference_title">Donate</string>
+ 
++    <string name="action_open_terminal">Switch to terminal</string>
+ </resources>

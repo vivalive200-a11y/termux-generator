@@ -2,7 +2,7 @@ diff --git a/packages/bash/etc-bash.bashrc b/packages/bash/etc-bash.bashrc
 index c1f4780..9d2e4b1 100644
 --- a/packages/bash/etc-bash.bashrc
 +++ b/packages/bash/etc-bash.bashrc
-@@ -32,3 +32,69 @@
+@@ -32,3 +32,75 @@
  	. "@TERMUX_PREFIX@/share/bash-completion/bash_completion"
  fi
  # vim: set noet ft=bash tw=4 sw=4 ff=unix
@@ -16,6 +16,9 @@ index c1f4780..9d2e4b1 100644
 +	DSH_BIN="$PREFIX/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
 +	DSH_PROVIDER="$PREFIX/lib/node_modules/@jiesou/dsh-commandcode-go-provider"
 +	DSH_PORT="${DSH_PORT:-3080}"
++	DSH_URL_FILE="${HOME}/.dsh-web-url"
++	DSH_LOG="${HOME}/.dsh-web.log"
++	rm -f "$DSH_URL_FILE"
 +	if [ ! -f "$DSH_BIN" ]; then
 +		command -v npm > /dev/null 2>&1 || { echo "[dsh] Installing npm (needs network) ..."; pkg install -y npm; }
 +		if command -v npm > /dev/null 2>&1; then
@@ -67,7 +70,10 @@ index c1f4780..9d2e4b1 100644
 +		fi
 +		printf '\n[dsh] Web UI: http://127.0.0.1:%s  (Ctrl-C to stop)\n' "$DSH_PORT"
 +		printf '[dsh] First run: Models page -> store COMMANDCODE_API_KEY -> create a session.\n'
-+		node --expose-internals -r "$PRELOAD" "$DSH_BIN" web --port "$DSH_PORT" --no-open
++		# The authenticated URL carries a per-process token; publish it for the in-app WebView.
++		node --expose-internals -r "$PRELOAD" "$DSH_BIN" web --port "$DSH_PORT" --no-open 2>&1 \
++			| tee "$DSH_LOG" \
++			| sed -n 's|.*dsh web: \(http[^ ]*\)|\1|p' | head -n 1 > "$DSH_URL_FILE"
 +	else
 +		echo "[dsh] Not installed. Try: pkg install npm && npm install -g @deepseek-ai/dsh"
 +	fi
