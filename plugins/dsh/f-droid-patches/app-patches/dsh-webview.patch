@@ -1,3 +1,15 @@
+diff --git a/termux-app/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index 1d0dfe1..8ace496 100644
+--- a/termux-app/app/src/main/AndroidManifest.xml
++++ b/termux-app/app/src/main/AndroidManifest.xml
+@@ -46,6 +46,7 @@
+         android:requestLegacyExternalStorage="true"
+         android:roundIcon="@mipmap/ic_launcher_round"
+         android:supportsRtl="false"
++        android:usesCleartextTraffic="true"
+         android:theme="@style/Theme.TermuxApp.DayNight.DarkActionBar"
+         tools:targetApi="m">
+ 
 diff --git a/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java b/app/src/main/java/com/termux/app/TermuxActivity.java
 index 0c9f741..aaa82d5 100644
 --- a/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java
@@ -44,10 +56,10 @@ index 0c9f741..aaa82d5 100644
          Logger.logDebug(LOG_TAG, "onDestroy");
 diff --git a/termux-app/app/src/main/java/com/termux/dshweb/DshWebOverlay.java b/app/src/main/java/com/termux/dshweb/DshWebOverlay.java
 new file mode 100644
-index 0000000..da4e36b
+index 0000000..13c708f
 --- /dev/null
 +++ b/termux-app/app/src/main/java/com/termux/dshweb/DshWebOverlay.java
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,161 @@
 +package com.termux.dshweb;
 +
 +import android.annotation.SuppressLint;
@@ -58,14 +70,17 @@ index 0000000..da4e36b
 +import android.os.Looper;
 +import android.util.Log;
 +import android.view.View;
++import android.webkit.WebResourceError;
 +import android.webkit.WebResourceRequest;
 +import android.webkit.WebView;
 +import android.webkit.WebViewClient;
 +
++import java.io.ByteArrayOutputStream;
 +import java.io.File;
++import java.io.FileInputStream;
 +import java.io.IOException;
++import java.io.InputStream;
 +import java.nio.charset.StandardCharsets;
-+import java.nio.file.Files;
 +
 +/**
 + * Swaps the terminal for the DSH web UI as soon as the server is up.
@@ -73,34 +88,36 @@ index 0000000..da4e36b
 + * Termux's bootstrap second stage runs `~/.bashrc`, which starts `dsh web` on
 + * 127.0.0.1:3080 and writes the authenticated URL (it carries a per-process
 + * token) to `$HOME/.dsh-web-url`. This overlay waits for that file, then loads
-+ * it into a WebView so the app is usable the moment it is opened. Long-press
-+ * the floating button (or tap the WebView's overflow) to go back to the terminal.
++ * it into a WebView so the app is usable the moment it is opened. Tap the
++ * floating button to switch between the web UI and the terminal.
 + */
 +public final class DshWebOverlay {
 +
 +    private static final String LOG_TAG = "DshWebOverlay";
-+    private static final int DSH_PORT = 3080;
 +    private static final long POLL_INTERVAL_MS = 500;
-+    private static final long POLL_TIMEOUT_MS = 600000;
++    private static final long RETRY_MS = 3000;
 +
-+    private final Activity activity;
 +    private final View webView;
 +    private final View terminalView;
 +    private final View toggleButton;
 +    private final File urlFile;
 +    private final Handler handler = new Handler(Looper.getMainLooper());
-+    private final long startedAt = System.currentTimeMillis();
 +    private String loadedUrl;
 +    private boolean stopped;
++    private boolean loaded;
++    private boolean loadFailed;
++    private long lastLoadAt;
 +
 +    public DshWebOverlay(Activity activity, WebView webView, View terminalView, View toggleButton) {
-+        this.activity = activity;
 +        this.webView = webView;
 +        this.terminalView = terminalView;
 +        this.toggleButton = toggleButton;
-+        this.urlFile = new File(activity.getFilesDir().getParentFile(), "home/.dsh-web-url");
++        this.urlFile = new File(activity.getFilesDir(), "home/.dsh-web-url");
 +        configure(webView);
-+        toggleButton.setOnClickListener(v -> showTerminal());
++        toggleButton.setOnClickListener(v -> {
++            if (webView.getVisibility() == View.VISIBLE) showTerminal();
++            else showWeb();
++        });
 +    }
 +
 +    @SuppressLint("SetJavaScriptEnabled")
@@ -109,6 +126,23 @@ index 0000000..da4e36b
 +        view.getSettings().setDomStorageEnabled(true);
 +        view.getSettings().setAllowFileAccess(false);
 +        view.setWebViewClient(new WebViewClient() {
++            @Override
++            public void onPageFinished(WebView v, String url) {
++                // Error pages fire this too; only a clean load counts as success.
++                if (!loadFailed) loaded = true;
++            }
++
++            @Override
++            public void onReceivedError(WebView v, WebResourceRequest request, WebResourceError error) {
++                if (request.isForMainFrame()) loadFailed = true;
++            }
++
++            @Override
++            @SuppressWarnings("deprecation")
++            public void onReceivedError(WebView v, int errorCode, String description, String failingUrl) {
++                loadFailed = true;
++            }
++
 +            @Override
 +            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request) {
 +                Uri uri = request.getUrl();
@@ -138,23 +172,37 @@ index 0000000..da4e36b
 +        public void run() {
 +            if (stopped) return;
 +            String url = readUrl();
-+            if (url != null && !url.equals(loadedUrl)) {
-+                loadedUrl = url;
-+                showWeb();
-+                ((WebView) webView).loadUrl(url);
-+                return;
++            if (url != null) {
++                if (!url.equals(loadedUrl)) {
++                    // A new token means dsh restarted, so the old page is dead.
++                    loadedUrl = url;
++                    loaded = false;
++                    loadFailed = false;
++                    Log.i(LOG_TAG, "loading " + url);
++                    showWeb();
++                }
++                // The first run installs npm packages for ~20 minutes and dsh
++                // binds its port only at the end, so keep retrying until a page
++                // actually finishes loading.
++                if (!loaded && System.currentTimeMillis() - lastLoadAt > RETRY_MS) {
++                    lastLoadAt = System.currentTimeMillis();
++                    loadFailed = false;
++                    ((WebView) webView).loadUrl(url);
++                }
 +            }
-+            if (System.currentTimeMillis() - startedAt < POLL_TIMEOUT_MS) {
-+                handler.postDelayed(this, POLL_INTERVAL_MS);
-+            }
++            handler.postDelayed(this, POLL_INTERVAL_MS);
 +        }
 +    };
 +
 +    /** The URL file is rewritten by every shell start; an empty or absent file means "not yet". */
 +    private String readUrl() {
 +        if (!urlFile.isFile()) return null;
-+        try {
-+            String text = new String(Files.readAllBytes(urlFile.toPath()), StandardCharsets.UTF_8).trim();
++        try (InputStream in = new FileInputStream(urlFile)) {
++            ByteArrayOutputStream buf = new ByteArrayOutputStream();
++            byte[] chunk = new byte[512];
++            int n;
++            while ((n = in.read(chunk)) > 0) buf.write(chunk, 0, n);
++            String text = new String(buf.toByteArray(), StandardCharsets.UTF_8).trim();
 +            return text.startsWith("http") ? text : null;
 +        } catch (IOException e) {
 +            return null;
