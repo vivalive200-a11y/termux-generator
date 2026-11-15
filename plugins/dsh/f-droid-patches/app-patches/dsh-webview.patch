@@ -1,8 +1,16 @@
 diff --git a/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java b/app/src/main/java/com/termux/app/TermuxActivity.java
-index 0c9f741..3e76fd5 100644
+index 0c9f741..aaa82d5 100644
 --- a/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java
 +++ b/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java
-@@ -86,6 +86,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
+@@ -29,6 +29,7 @@ import android.widget.Toast;
+ import com.termux.R;
+ import com.termux.app.api.file.FileReceiverActivity;
+ import com.termux.app.terminal.TermuxActivityRootView;
++import com.termux.dshweb.DshWebOverlay;
+ import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
+ import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
+ import com.termux.shared.activities.ReportActivity;
+@@ -86,6 +87,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
       */
      TermuxService mTermuxService;
  
@@ -12,7 +20,7 @@ index 0c9f741..3e76fd5 100644
      /**
       * The {@link TerminalView} shown in  {@link TermuxActivity} that displays the terminal.
       */
-@@ -274,6 +277,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
+@@ -274,6 +278,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
              return;
          }
  
@@ -26,7 +34,7 @@ index 0c9f741..3e76fd5 100644
          // Send the {@link TermuxConstants#BROADCAST_TERMUX_OPENED} broadcast to notify apps that Termux
          // app has been opened.
          TermuxUtils.sendTermuxOpenedBroadcast(this);
-@@ -346,6 +356,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
+@@ -346,6 +357,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
  
      @Override
      public void onDestroy() {
@@ -34,20 +42,13 @@ index 0c9f741..3e76fd5 100644
          super.onDestroy();
  
          Logger.logDebug(LOG_TAG, "onDestroy");
-@@ -1010,4 +1021,4 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
-         return intent;
-     }
- 
--}
-+}
-\ No newline at end of file
-diff --git a/termux-app/app/src/main/java/com/termux/app/terminal/DshWebOverlay.java b/app/src/main/java/com/termux/app/terminal/DshWebOverlay.java
+diff --git a/termux-app/app/src/main/java/com/termux/dshweb/DshWebOverlay.java b/app/src/main/java/com/termux/dshweb/DshWebOverlay.java
 new file mode 100644
-index 0000000..1f1da6d
+index 0000000..da4e36b
 --- /dev/null
-+++ b/termux-app/app/src/main/java/com/termux/app/terminal/DshWebOverlay.java
++++ b/termux-app/app/src/main/java/com/termux/dshweb/DshWebOverlay.java
 @@ -0,0 +1,125 @@
-+package com.termux.app.terminal;
++package com.termux.dshweb;
 +
 +import android.annotation.SuppressLint;
 +import android.app.Activity;
@@ -173,7 +174,7 @@ index 0000000..1f1da6d
 +    }
 +}
 diff --git a/termux-app/app/src/main/res/layout/activity_termux.xml b/app/src/main/res/layout/activity_termux.xml
-index 831ea7c..e06f48c 100644
+index 831ea7c..e5a5ca8 100644
 --- a/termux-app/app/src/main/res/layout/activity_termux.xml
 +++ b/termux-app/app/src/main/res/layout/activity_termux.xml
 @@ -94,6 +94,25 @@
@@ -202,13 +203,6 @@ index 831ea7c..e06f48c 100644
          <androidx.viewpager.widget.ViewPager
              android:id="@+id/terminal_toolbar_view_pager"
              android:visibility="gone"
-@@ -110,4 +129,4 @@
-         android:layout_height="1dp"
-         android:background="@android:color/transparent" />
- 
--</com.termux.app.terminal.TermuxActivityRootView>
-+</com.termux.app.terminal.TermuxActivityRootView>
-\ No newline at end of file
 diff --git a/termux-app/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
 index cbd2992..75a5d16 100644
 --- a/termux-app/app/src/main/res/values/strings.xml
