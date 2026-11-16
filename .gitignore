@@ -31,3 +31,6 @@ gradle-app.setting
 
 # plugin specific
 plugins/gradle-project/bin
+
+# bootstrap cache archive lives in the bootstrap-cache release, not in git
+plugins/*/bootstrap-cache/*.tar

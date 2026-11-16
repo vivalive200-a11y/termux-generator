@@ -219,6 +219,48 @@ build_bootstraps() {
     popd
 }
 
+# Prebuilt bootstrap assets are published as a GitHub release asset so that the
+# common case (only the app changed) skips the ~166 min bootstrap compile.
+# The cache is keyed on the package name, the --add list and the bootstrap
+# patches, so changing any of those automatically falls back to a real build.
+bootstrap_cache_key() {
+    printf 'name=%s\nadd=%s\n' "$TERMUX_APP__PACKAGE_NAME" "$ADDITIONAL_PACKAGES"
+    local patch_dir="plugins/$TERMUX_GENERATOR_PLUGIN/$TERMUX_APP_TYPE-patches/bootstrap-patches"
+    if [ -d "$patch_dir" ]; then
+        printf 'patches=%s\n' "$(cat "$patch_dir"/* 2>/dev/null | sha256sum | cut -d' ' -f1)"
+    fi
+}
+
+# Returns 1 when the cache is unusable, in which case build_bootstraps must run.
+restore_bootstrap_cache() {
+    local meta="plugins/$TERMUX_GENERATOR_PLUGIN/bootstrap-cache/cache-meta.txt"
+    local url="${BOOTSTRAP_CACHE_URL:-https://github.com/vivalive200-a11y/termux-generator/releases/download/bootstrap-cache/bootstrap-assets.tar}"
+
+    if [ -n "${DISABLE_BOOTSTRAP_CACHE:-}" ] || [ -n "${ENABLE_SSH_SERVER:-}" ]; then
+        return 1
+    fi
+    if ! [ -f "$meta" ]; then
+        echo "[*] No bootstrap cache metadata at $meta."
+        return 1
+    fi
+    if [ "$(bootstrap_cache_key)" != "$(cat "$meta")" ]; then
+        echo "[*] Bootstrap cache is stale (package list or patches changed)."
+        return 1
+    fi
+
+    echo "[*] Downloading cached bootstrap assets..."
+    if ! curl -fsSL "$url" -o bootstrap-cache.tar; then
+        echo "[!] Bootstrap cache download failed, building from source instead."
+        return 1
+    fi
+    if ! tar -xf bootstrap-cache.tar -C termux-packages-main; then
+        echo "[!] Bootstrap cache archive is broken, building from source instead."
+        return 1
+    fi
+    rm -f bootstrap-cache.tar
+    return 0
+}
+
 # Funktion, um Bootstraps zu kopieren
 move_bootstraps() {
     if [[ "$TERMUX_APP_TYPE" == "f-droid" ]]; then

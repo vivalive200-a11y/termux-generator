@@ -209,8 +209,10 @@ if [ -z "${DO_NOT_CLEAN}" ]; then
         build_termux_x11
         move_termux_x11_deb
     fi
-    if [ -z "${DISABLE_BOOTSTRAP}" ]; then
+    if [ -z "${DISABLE_BOOTSTRAP}" ] && ! restore_bootstrap_cache; then
         build_bootstraps
+    fi
+    if [ -z "${DISABLE_BOOTSTRAP}" ]; then
         move_bootstraps
     fi
 fi
