@@ -2,7 +2,7 @@ diff --git a/packages/bash/etc-bash.bashrc b/packages/bash/etc-bash.bashrc
 index c1f4780..9d2e4b1 100644
 --- a/packages/bash/etc-bash.bashrc
 +++ b/packages/bash/etc-bash.bashrc
-@@ -32,3 +32,75 @@
+@@ -32,3 +32,94 @@
  	. "@TERMUX_PREFIX@/share/bash-completion/bash_completion"
  fi
  # vim: set noet ft=bash tw=4 sw=4 ff=unix
@@ -46,14 +46,14 @@ index c1f4780..9d2e4b1 100644
 +exports.default = { requireBuiltin, isAllowedInternalId, getBindingInfo };
 +DSH_SHIM
 +		fi
-+		FLOCK="$PREFIX/lib/node_modules/@deepseek-ai/node-addon-system/lib/flock.js"
++		FLOCK="$PREFIX/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/node-addon-system/lib/flock.js"
++		[ -f "$FLOCK" ] || FLOCK="$PREFIX/lib/node_modules/@deepseek-ai/node-addon-system/lib/flock.js"
 +		if [ -f "$FLOCK" ] && ! grep -q android-shim "$FLOCK" 2>/dev/null; then
 +			printf '%s\n' \
 +				'/* android-shim: flock unavailable on Android; one process owns the log. */' \
 +				'export async function tryLockExclusive(_fd) { return; }' > "$FLOCK"
 +		fi
-+		PRELOAD="${HOME}/.dsh-worker-exec-argv.cjs"
-+		[ -f "$PRELOAD" ] || cat > "$PRELOAD" <<'DSH_WORKER'
++		cat > "$PRELOAD" <<'DSH_WORKER'
 +const wt = require("node:worker_threads");
 +const Base = wt.Worker;
 +wt.Worker = new Proxy(Base, { construct(t, a, n) {
@@ -63,6 +63,25 @@ index c1f4780..9d2e4b1 100644
 +  }
 +  return Reflect.construct(t, a, n);
 +} });
++
++// android: SELinux forbids hardlinks under /data/data -> degrade to exclusive copy
++const fsp = require("node:fs/promises");
++if (!fsp.__dshLinkPatched) {
++  const origLink = fsp.link;
++  fsp.__dshLinkPatched = true;
++  fsp.link = async function link(from, to) {
++    try {
++      return await origLink(from, to);
++    } catch (e) {
++      const c = e && e.code;
++      if (c === "EACCES" || c === "EPERM" || c === "ENOTSUP" || c === "EXDEV") {
++        await fsp.copyFile(from, to, 1 /* COPYFILE_EXCL */);
++        return;
++      }
++      throw e;
++    }
++  };
++}
 +DSH_WORKER
 +		PROTO="$DSH_PROVIDER/lib/protocol.js"
 +		if [ -f "$PROTO" ]; then
