@@ -73,7 +73,7 @@ index c1f4780..9d2e4b1 100644
 +		# The authenticated URL carries a per-process token; publish it for the in-app WebView.
 +		node --expose-internals -r "$PRELOAD" "$DSH_BIN" web --port "$DSH_PORT" --no-open 2>&1 \
 +			| tee "$DSH_LOG" \
-+			| sed -n 's|.*dsh web: \(http[^ ]*\)|\1|p' | head -n 1 > "$DSH_URL_FILE"
++			| sed -u -n 's|.*dsh web: \(http[^ ]*\)|\1|p' > "$DSH_URL_FILE"
 +	else
 +		echo "[dsh] Not installed. Try: pkg install npm && npm install -g @deepseek-ai/dsh"
 +	fi
