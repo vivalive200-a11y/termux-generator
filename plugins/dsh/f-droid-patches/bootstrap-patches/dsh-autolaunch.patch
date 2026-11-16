@@ -1,8 +1,8 @@
 diff --git a/packages/bash/etc-bash.bashrc b/packages/bash/etc-bash.bashrc
-index c1f4780..9d2e4b1 100644
+index c1f4780..ab8df70 100644
 --- a/packages/bash/etc-bash.bashrc
 +++ b/packages/bash/etc-bash.bashrc
-@@ -32,3 +32,94 @@
+@@ -32,3 +32,95 @@ if [[ -r "@TERMUX_PREFIX@/share/bash-completion/bash_completion" ]]; then
  	. "@TERMUX_PREFIX@/share/bash-completion/bash_completion"
  fi
  # vim: set noet ft=bash tw=4 sw=4 ff=unix
@@ -53,6 +53,7 @@ index c1f4780..9d2e4b1 100644
 +				'/* android-shim: flock unavailable on Android; one process owns the log. */' \
 +				'export async function tryLockExclusive(_fd) { return; }' > "$FLOCK"
 +		fi
++		PRELOAD="${HOME}/.dsh-worker-exec-argv.cjs"
 +		cat > "$PRELOAD" <<'DSH_WORKER'
 +const wt = require("node:worker_threads");
 +const Base = wt.Worker;
