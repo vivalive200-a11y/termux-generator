@@ -1,3 +1,3 @@
 name=com.dsh.termux
 add=xkeyboard-config,nodejs,npm,bash,ca-certificates,termux-api
-patches=50bea967418973661de5c0bf5431efcb6e432c0805faec057c5471b323e2f1b8
+patches=0dcd772651c5103c1e317d849df8f8a749efd0b6dc4e5be762a1ceb39a8ee754
