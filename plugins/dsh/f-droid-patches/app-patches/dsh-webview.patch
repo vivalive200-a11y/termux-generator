@@ -11,7 +11,7 @@ index 1d0dfe1..8ace496 100644
          tools:targetApi="m">
  
 diff --git a/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java b/app/src/main/java/com/termux/app/TermuxActivity.java
-index 0c9f741..aaa82d5 100644
+index 0c9f741..0b9164f 100644
 --- a/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java
 +++ b/termux-app/app/src/main/java/com/termux/app/TermuxActivity.java
 @@ -29,6 +29,7 @@ import android.widget.Toast;
@@ -32,7 +32,7 @@ index 0c9f741..aaa82d5 100644
      /**
       * The {@link TerminalView} shown in  {@link TermuxActivity} that displays the terminal.
       */
-@@ -274,6 +278,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
+@@ -274,6 +278,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
              return;
          }
  
@@ -40,13 +40,14 @@ index 0c9f741..aaa82d5 100644
 +        mDshWebOverlay = new DshWebOverlay(this,
 +            findViewById(R.id.dsh_web_view),
 +            findViewById(R.id.drawer_layout),
-+            findViewById(R.id.dsh_terminal_toggle_button));
++            findViewById(R.id.dsh_terminal_toggle_button),
++            findViewById(R.id.terminal_toolbar_view_pager));
 +        mDshWebOverlay.start();
 +
          // Send the {@link TermuxConstants#BROADCAST_TERMUX_OPENED} broadcast to notify apps that Termux
          // app has been opened.
          TermuxUtils.sendTermuxOpenedBroadcast(this);
-@@ -346,6 +357,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
+@@ -346,6 +358,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
  
      @Override
      public void onDestroy() {
@@ -56,10 +57,10 @@ index 0c9f741..aaa82d5 100644
          Logger.logDebug(LOG_TAG, "onDestroy");
 diff --git a/termux-app/app/src/main/java/com/termux/dshweb/DshWebOverlay.java b/app/src/main/java/com/termux/dshweb/DshWebOverlay.java
 new file mode 100644
-index 0000000..13c708f
+index 0000000..cdf6691
 --- /dev/null
 +++ b/termux-app/app/src/main/java/com/termux/dshweb/DshWebOverlay.java
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,170 @@
 +package com.termux.dshweb;
 +
 +import android.annotation.SuppressLint;
@@ -100,6 +101,8 @@ index 0000000..13c708f
 +    private final View webView;
 +    private final View terminalView;
 +    private final View toggleButton;
++    private final View terminalToolbar;
++    private final int terminalToolbarVisibility;
 +    private final File urlFile;
 +    private final Handler handler = new Handler(Looper.getMainLooper());
 +    private String loadedUrl;
@@ -108,10 +111,15 @@ index 0000000..13c708f
 +    private boolean loadFailed;
 +    private long lastLoadAt;
 +
-+    public DshWebOverlay(Activity activity, WebView webView, View terminalView, View toggleButton) {
++    public DshWebOverlay(Activity activity, WebView webView, View terminalView, View toggleButton,
++                         View terminalToolbar) {
 +        this.webView = webView;
 +        this.terminalView = terminalView;
 +        this.toggleButton = toggleButton;
++        // The extra-keys row (ESC/CTRL/HOME...) only drives the terminal, so it
++        // must disappear with it instead of floating above the web page.
++        this.terminalToolbar = terminalToolbar;
++        this.terminalToolbarVisibility = terminalToolbar.getVisibility();
 +        this.urlFile = new File(activity.getFilesDir(), "home/.dsh-web-url");
 +        configure(webView);
 +        toggleButton.setOnClickListener(v -> {
@@ -211,6 +219,7 @@ index 0000000..13c708f
 +
 +    private void showWeb() {
 +        terminalView.setVisibility(View.GONE);
++        terminalToolbar.setVisibility(View.GONE);
 +        webView.setVisibility(View.VISIBLE);
 +        toggleButton.setVisibility(View.VISIBLE);
 +    }
@@ -218,6 +227,7 @@ index 0000000..13c708f
 +    private void showTerminal() {
 +        webView.setVisibility(View.GONE);
 +        terminalView.setVisibility(View.VISIBLE);
++        terminalToolbar.setVisibility(terminalToolbarVisibility);
 +        toggleButton.setVisibility(View.VISIBLE);
 +    }
 +}
